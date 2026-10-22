@@ -1,7 +1,7 @@
 """Train the plate READER (CNN + CTC, see plate_reader.py) and save it as a run.
 
-Two stages, because 107 real labelled plates are far too few for a 1.85M-parameter network
-on their own (trained on them alone it reaches only ~55% of whole plates):
+Two stages, because real labelled plates are far too few for a 1.85M-parameter network on
+their own:
 1. Pretrain on the synthetic plates in data/synthetic/plates/v1 (made by tools/synth_plates.py;
    two-row plates are left out — the reader reads one row).
 2. Fine-tune on every real plate in data/ocr/plates (file name = the number), half of every
@@ -450,7 +450,7 @@ def main() -> None:
     real_x, real_numbers = clean_arrays(real)
     log(f"real plates read by the synthetic-only model: {exact(model, real_x, real_numbers):.4f}")
 
-    if args.cv:  # the protocol behind the documented 98.1%: folds by plate, seed-0 shuffle
+    if args.cv:  # folds by plate, seed-0 shuffle
         # Folds are by plate number, so crops of one plate never sit on both sides of a fold.
         order = list(dict.fromkeys(s[1] for s in real))
         random.Random(0).shuffle(order)

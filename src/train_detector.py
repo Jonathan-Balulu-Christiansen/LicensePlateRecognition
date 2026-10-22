@@ -6,8 +6,7 @@ main(), then run `python src/train_detector.py`.
 
 YOLO26m (Ultralytics, Jan 2026): an NMS-free end-to-end head and a label assignment tuned
 for small objects — our plates are often only 50-250 px wide in a 1920x1080 frame. Trained
-at 640, the same size it was pretrained at on COCO and the size the app runs at: on the test
-split that beat training at 960 (mAP50-95 0.750 vs 0.674 when both run at 640). The
+at 640, the same size it was pretrained at on COCO and the size the app runs at. The
 pretrained COCO checkpoint lives in weights/pretrained/ and is downloaded there on first use.
 
 Augmentation is online, inside Ultralytics' training loader: its defaults (mosaic, shift and
@@ -15,8 +14,8 @@ scale, colour, mirror images), plus CameraEffects — what a real camera does to
 motion blur, sensor noise, JPEG artefacts, exposure — at modest rates, without a new dependency
 (Ultralytics would need albumentations, whose OpenCV wheel clashes with the one installed).
 No rotation, shear or perspective: Ultralytics turns a rotated box into the box around it, and
-for a plate (~4.7:1) 10 degrees already makes that box ~80% taller than the plate — training on
-those loose boxes dropped test mAP50-95 from 0.750 to 0.611.
+for a plate (~4.7:1) 10 degrees already makes that box ~80% taller than the plate, and training
+on such loose boxes teaches loose predictions.
 """
 
 from __future__ import annotations
@@ -169,8 +168,8 @@ def main() -> None:
         "epochs": 100,
         "batch": 8,
         "workers": 4,
-        # No early stop: mAP50-95 (how tight the boxes are) still climbs late — the best
-        # epoch of the in-service run was 88 of 100 — and the validation split is small and noisy.
+        # No early stop: mAP50-95 (how tight the boxes are) keeps improving late in training,
+        # and a small validation split is noisy.
         "patience": 100,
         "amp": True,  # mixed precision (faster on GPU)
         "seed": 0,

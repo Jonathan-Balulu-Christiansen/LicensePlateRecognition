@@ -11,6 +11,10 @@ digits, and the number is confirmed by voting over several frames.
 Israeli civilian plates carry digits only (7 or 8), so the reader's decoding is constrained to
 exactly those two formats.
 
+> **No real license plates.** Every plate number in this repository — in the code, tests,
+> documentation and examples — is fictional and does not belong to a real vehicle. The
+> repository contains no images, video or plate data, and no trained models.
+
 ## How it works
 
 ```text
@@ -31,27 +35,13 @@ CTC loss, which needs only the number string as a label: the network learns by i
 digit is. The network is pretrained on synthetic plates and fine-tuned on real crops. Keras 3 runs
 on the PyTorch backend, so TensorFlow is not needed.
 
-## Results
+## Evaluation
 
-| Stage | Metric | Value |
-|---|---|---|
-| Detector (YOLO26m, 640) | mAP50 on the held-out test split | **0.978** |
-| | mAP50-95 | 0.750 |
-| | precision / recall | 0.952 / 0.937 |
-| Plate reader (CNN+CTC) | whole plates read exactly (5-fold cross-validation by plate) | **98.1%** |
-| | speed | ~1.1 ms per plate (batch of 8, RTX 4070 Ti) |
-| End to end | demo clips that lock the correct number | 7 / 8 |
-
-How these numbers were measured:
-- **Detector.** It is scored once, at its own input size, on a test split that is never used for
-  early stopping or checkpoint selection.
-- **Reader.** It is scored on whole plates: a plate counts only if every digit is right. Every plate
-  is tested by a model that never saw it.
-- **The reader's design.** Two results drove it:
-  - The classic alternative (segment the digits, then classify each one) reached 64.5–67.3% under
-    the same protocol.
-  - The same network trained on real plates alone reached about 55%. Synthetic pretraining is what
-    makes it work.
+- **Detector.** `train_detector.py` scores the best checkpoint once on a held-out test split. That
+  split is never used for early stopping or checkpoint selection.
+- **Reader.** It is scored on whole plates: a plate counts only if every digit is right.
+  `train_reader.py --cv` runs 5-fold cross-validation by plate, so every plate is tested by a
+  model that never saw it.
 
 ## Repository layout
 
@@ -141,8 +131,8 @@ themselves when those are absent.
 
 ## Design decisions
 
-- **Read the whole plate with CTC.** No digit segmentation is needed. In the first version,
-  segmentation (not digit classification) was the main source of errors.
+- **Read the whole plate with CTC.** No digit segmentation is needed. Segmenting a plate into
+  digits is fragile under blur, tilt and dirt.
 - **Synthetic pretraining, real fine-tuning.**
   - Real labelled plates are scarce.
   - Rendered plates follow the real Israeli layouts and numbering rules, and their labels are exact
@@ -152,17 +142,17 @@ themselves when those are absent.
     trusted to print exact digits.
   - Realistic numbers are then printed onto those plates in the right perspective and light.
   - Validation and test data stay real only.
-- **Train the detector at its pretraining and inference size (640).** It scored higher than the
-  same model trained at 960, when both were scored at 640.
+- **Train the detector at its pretraining and inference size (640).** One size from pretraining
+  to deployment.
 - **No rotation or shear augmentation for the detector.**
   - Ultralytics replaces a rotated box with the box around it. For a long, thin plate, that box is
-    much taller than the plate itself, and training on it measurably loosened the predicted boxes.
+    much taller than the plate itself, and training on it teaches loose boxes.
   - The reader has its own plate-level augmentation instead: rotation up to ±12° without cutting
     digits, viewing angle, blur, low resolution, compression, lighting, glare and shadow.
 - **Cross-validation by plate** for the reader, because real plates are too few for a meaningful
   fixed test split.
-- **ByteTrack boxes are used as they are.** A measured extra smoothing step added more lag than the
-  jitter it removed.
+- **ByteTrack boxes are used as they are.** They are already Kalman-filtered; an extra smoothing
+  step adds lag.
 
 ## Known limitations
 

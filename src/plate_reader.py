@@ -10,9 +10,7 @@ then locks a number once enough reads of the same tracked plate agree.
 Architecture ("tcn"): a 2D CNN trunk (4 conv blocks, 2x2 pooling twice then 2x1 twice, so the
 width stays at 48) collapses the height, then a residual stack of dilated 1D convolutions
 (dilation 1..32) runs along the plate, so every output column sees the whole plate and can use
-its 3-2-3 / 2-3-2 layout. 1.85M parameters. Measured with 5-fold cross-validation by plate on
-the 107 real crops: 98.1% of whole plates exact (the segmentation + digit-CNN reader it replaced:
-64.5-67.3%).
+its 3-2-3 / 2-3-2 layout. 1.85M parameters.
 
 Training lives in train_reader.py; this module is what the app needs at run time.
 """
@@ -240,9 +238,7 @@ class PlateVoter:
     def update(self, track_id: int, string: str, confs: tuple[float, ...]) -> str | None:
         """Add one read; return the locked number for this track, or None yet.
 
-        Gates on the *weakest* digit: one shaky digit fails the whole read. (The reader's
-        confidences are informative: across cross-validation, right reads averaged 0.99 and
-        wrong ones 0.76 for the product of digit confidences.)
+        Gates on the *weakest* digit: one shaky digit fails the whole read.
         """
         self._reads[track_id] += 1
         if string and confs and min(confs) >= self.min_conf and self.min_len <= len(string) <= self.max_len:
