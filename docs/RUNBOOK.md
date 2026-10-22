@@ -100,8 +100,13 @@ reads needed to lock; default 5), then **Start**.
 **What the screen shows.**
 - **Over the video:** each plate gets a box that reads `reading n/5`, then a red reticle once its
   number locks.
-- **In the side panel:** the locked number, as a plate with per-digit confidences, its country and
-  its format.
+- **In the side panel:** one card per plate in view, up to four, as the window height allows. Each
+  card shows:
+  - the camera's crop next to the number read;
+  - every digit with its confidence (unsure digits marked);
+  - the country and the read and detector scores.
+
+  Cards keep their order while their plates stay in view.
 - **Under the video:**
   - the time to process one frame: **FRAME**, split into DETECT+TRACK / READ / CONVERT;
   - **CAPTURE**, **FPS** and **TRACKS**;

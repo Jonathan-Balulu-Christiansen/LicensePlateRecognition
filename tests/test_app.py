@@ -78,25 +78,34 @@ def test_demo_clip_locks_the_expected_number(qapp, tmp_path):
 # ------------------------------------------------------------------------- window
 
 
-def test_window_builds_and_shows_a_plate(qapp):
+def test_window_builds_and_shows_several_plates(qapp):
     from app import MainWindow
     from pipeline import PlateView
-    from plate_origin import Origin
+    from plate_origin import UNKNOWN, Origin
 
     window = MainWindow()
+    window.show()
     assert window.start_button.text() == "Start"
     if DETECTOR.is_file():
         assert window.detector_combo.value() == str(DETECTOR)
 
-    window._show_plate(PlateView(7, "12345601", True, 5, 5, 7, (0.9998,) * 8, 0.78,
-                                 Origin("IL", "Israel", "plate color · yellow", 0.57), True))
-    assert window.plate_chip.text() == "LOCKED 5/5"
-    assert window.country_label.text() == "Israel"
-    assert window.format_label.text() == "8 digits · 3-2-3"
+    israel = Origin("IL", "Israel", "plate color · yellow", 0.57)
+    window._show_plates([PlateView(7, "12345601", True, 5, 5, 7, (0.9998,) * 8, 0.78, israel, True),
+                         PlateView(9, "1234567", False, 2, 5, 3, (0.97,) * 7, 0.66, UNKNOWN, True)])
+    first, second = window.plate_items[:2]
+    assert first.isVisible() and second.isVisible() and not window.plate_items[2].isVisible()
+    assert first.chip.text() == "LOCKED 5/5" and first.track_label.text() == "ID 7"
+    assert first.reads_label.text() == "· 7 reads" and first.property("locked") is True
+    assert first.origin_label.text() == "Israel · 8 digits"
+    assert first.scores_label.text() == "read 0.998 · det 0.78"
+    assert second.chip.text() == "READING 2/5"
+    assert sum(cell.isVisible() for cell, _, _ in second.digit_cells) == 7
+    assert window.plates_count.text() == "2 · 1 locked"
     assert not window.grab().isNull()  # every custom paintEvent runs without error
 
-    window._show_plate(None)
-    assert window.country_label.text() == "—"
+    window._show_plates([])
+    assert not any(item.isVisible() for item in window.plate_items)
+    assert window.no_plate_label.isVisible()
     window.close()
 
 

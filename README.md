@@ -104,10 +104,23 @@ The app loads `weights/detector/best.pt` and `weights/reader/plate_reader.keras`
 python src/app.py
 ```
 
+![Visus reading four plates at once on a synthetic street scene](assets/screenshots/visus-live.png)
+
+<sub>A synthetic scene: the vehicles are AI-generated and every plate number is fictional.</sub>
+
 Pick a **Source** (a camera, or *Video file…*), a **Detector** and a **Reader** (the promoted
 models, every training run, or any file), and the number of agreeing **Votes** needed to lock a
-plate, then press **Start**. Locked plates appear in the side panel and in *Recent passages*.
-Each one is also appended to `reports/gate_log.jsonl`:
+plate, then press **Start**.
+
+**Plates in view.** Every plate in view gets its own card in the side panel. A card shows:
+- the plate as the camera saw it, next to the number read;
+- each digit's confidence, with unsure digits marked;
+- the country and the scores.
+
+Cards keep their place while their plate is in view. As many cards are shown as the window
+height holds, up to four, and a locked plate is marked with the accent edge.
+
+Locked plates are also listed in *Recent passages* and appended to `reports/gate_log.jsonl`:
 
 ```json
 {"date":"21/10/2026","time":"17:24:43","plate":"12345601","origin":"IL","detector_confidence":0.78,"ocr_digit_mean":0.9996,"ocr_plate_confidence":0.9972}

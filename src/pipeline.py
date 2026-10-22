@@ -2,7 +2,7 @@
 
 Everything heavy runs in a worker QThread, so the window stays responsive. The worker
 does not draw on the frame: it sends each frame together with a FrameInfo (the tracked
-boxes, per-stage timings, the plate in focus), and the window paints the overlay and the
+boxes, per-stage timings, the plates in view), and the window paints the overlay and the
 side panel itself. A plate whose number locks is sent once more as a PlateEvent, which
 is also what gets appended to the gate log.
 """
@@ -58,6 +58,10 @@ DETECT_EVERY_N_FRAMES = 1  # run YOLO every Nth frame, reusing the previous boxe
 # 120fps, 0.18px at 30fps) and smoothing added ~3x more lag than it removed.
 TIMING_WINDOW = 30  # frames averaged for every number on screen (~1s at 30fps)
 FORGET_AFTER_FRAMES = 300  # drop a track's bookkeeping once it has been gone this long
+MAX_PANEL_PLATES = 4  # plates the side panel lists at once
+# A plate stays in the panel this long after its track is lost (~0.7s at 30fps), so a single
+# missed detection does not make its card blink out and back.
+HOLD_FRAMES = 20
 
 
 @dataclass(frozen=True)
@@ -73,7 +77,7 @@ class TrackView:
 
 @dataclass(frozen=True)
 class PlateView:
-    """The plate shown in the side panel: locked, or the leading candidate while reading."""
+    """One plate in the side panel: locked, or the leading candidate while reading."""
 
     track_id: int
     number: str
@@ -85,6 +89,7 @@ class PlateView:
     detector_conf: float
     origin: Origin
     visible: bool
+    crop: QImage | None = None  # the plate as the camera saw it, last time it was in view
 
 
 @dataclass(frozen=True)
@@ -114,7 +119,7 @@ class FrameInfo:
     """Everything the window needs about one frame besides its pixels."""
 
     tracks: list[TrackView]
-    focus: PlateView | None
+    plates: list[PlateView]  # the side panel, in the order the plates appeared
     stats: FrameStats
 
 
@@ -145,6 +150,7 @@ class _TrackState:
     confs_by_text: dict[str, tuple[float, ...]] = field(default_factory=dict)
     lock_confs: tuple[float, ...] = ()
     origin: Origin = UNKNOWN
+    crop: QImage | None = None  # the latest small crop, kept for the panel while the plate is lost
 
 
 def device_label(device: str = DEFAULT_DEVICE) -> str:
@@ -280,7 +286,6 @@ class VideoWorker(QThread):
         frame_index = 0
         last_detections = []  # reused on skipped frames so boxes keep drawing
         states: dict[int, _TrackState] = {}
-        focus_id: int | None = None
         # Average every readout over ~1s of frames. A single frame swings wildly (a detect
         # frame costs ~65ms, a skipped one ~5ms), which would hide the real numbers.
         # Frame 0 is never averaged: it pays the lazy CUDA/cuDNN init (~2.8s vs ~51ms
@@ -346,7 +351,6 @@ class VideoWorker(QThread):
                 if number:
                     state.lock_confs = confs
                     state.origin = origin_from_samples(state.colors)
-                    focus_id = track_id
                     self._report(PlateEvent(datetime.now(), track_id, number, state.origin, confidence, confs))
 
             tracks: list[TrackView] = []
@@ -364,10 +368,8 @@ class VideoWorker(QThread):
             image = self._to_qimage(frame)
             t_convert = time.perf_counter()
 
-            focus_id = self._choose_focus(focus_id, tracks, voter)
-            focus = self._plate_view(focus_id, states, voter, tracks) if focus_id is not None else None
-            for stale in [tid for tid, s in states.items()
-                          if frame_index - s.last_seen > FORGET_AFTER_FRAMES and tid != focus_id]:
+            plates = self._panel_plates(frame, frame_index, states, voter, tracks)
+            for stale in [tid for tid, s in states.items() if frame_index - s.last_seen > FORGET_AFTER_FRAMES]:
                 del states[stale]
 
             if frame_period:  # a video file: never show it faster than real time
@@ -404,23 +406,41 @@ class VideoWorker(QThread):
                 width=frame.shape[1],
                 height=frame.shape[0],
             )
-            self.frame_ready.emit(image, FrameInfo(tracks, focus, stats))
+            self.frame_ready.emit(image, FrameInfo(tracks, plates, stats))
             frame_index += 1
 
+    def _panel_plates(
+        self, frame, frame_index: int, states: dict[int, _TrackState], voter: PlateVoter, tracks: list[TrackView]
+    ) -> list[PlateView]:
+        """The plates for the side panel: every plate in view (or lost under HOLD_FRAMES ago)
+        that has a number or a candidate. When there are more than MAX_PANEL_PLATES, locked
+        ones come first, then the ones with the most agreeing reads. They are listed by track
+        id — the order they appeared — so a card keeps its place while its plate is in view."""
+        candidates = [tid for tid, state in states.items()
+                      if frame_index - state.last_seen <= HOLD_FRAMES and (voter.locked(tid) or voter.tally(tid)[0])]
+        candidates.sort(key=lambda tid: (voter.locked(tid) is not None, voter.tally(tid)[1]), reverse=True)
+        chosen = sorted(candidates[:MAX_PANEL_PLATES])
+        boxes = {t.track_id: t.box for t in tracks if t.track_id in chosen}
+        for track_id, box in boxes.items():
+            states[track_id].crop = self._crop_image(frame, box)
+        views = (self._plate_view(tid, states, voter, tracks) for tid in chosen)
+        return [view for view in views if view is not None]
+
     @staticmethod
-    def _choose_focus(focus_id: int | None, tracks: list[TrackView], voter: PlateVoter) -> int | None:
-        """Keep the side panel on one plate while it is on screen (it does not jump to every
-        new track); when it leaves, move to the visible plate furthest along — a locked one
-        first, then the one with the most agreeing reads."""
-        visible = [t.track_id for t in tracks if t.track_id is not None]
-        if focus_id in visible or not visible:
-            return focus_id
-        return max(visible, key=lambda tid: (voter.locked(tid) is not None, voter.tally(tid)[1]))
+    def _crop_image(frame, box: tuple[int, int, int, int], height: int = 56) -> QImage | None:
+        """A small copy of the plate for the panel: `height` px tall, at most 5x as wide."""
+        x1, y1, x2, y2 = box
+        crop = frame[max(0, y1):max(0, y2), max(0, x1):max(0, x2)]
+        if crop.shape[0] < 4 or crop.shape[1] < 4:
+            return None
+        width = min(height * 5, max(1, round(crop.shape[1] * height / crop.shape[0])))
+        small = np.ascontiguousarray(cv2.resize(crop, (width, height), interpolation=cv2.INTER_AREA))
+        return QImage(small.data, width, height, 3 * width, QImage.Format.Format_BGR888).copy()
 
     def _plate_view(
         self, track_id: int, states: dict[int, _TrackState], voter: PlateVoter, tracks: list[TrackView]
     ) -> PlateView | None:
-        """Snapshot of the focused plate for the side panel."""
+        """Snapshot of one plate for the side panel."""
         state = states.get(track_id)
         if state is None:
             return None
@@ -429,9 +449,9 @@ class VideoWorker(QThread):
         best, votes, reads = voter.tally(track_id)
         if number:
             return PlateView(track_id, number, True, votes, self._min_votes, reads, state.lock_confs,
-                             state.detector_conf, state.origin, visible)
+                             state.detector_conf, state.origin, visible, state.crop)
         return PlateView(track_id, best, False, votes, self._min_votes, reads, state.confs_by_text.get(best, ()),
-                         state.detector_conf, origin_from_samples(state.colors), visible)
+                         state.detector_conf, origin_from_samples(state.colors), visible, state.crop)
 
     def _report(self, event: PlateEvent) -> None:
         """Send a locked plate to the window and append it to the gate log.

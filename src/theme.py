@@ -164,6 +164,9 @@ def stylesheet() -> str:
     QFrame#Footer {{ border-top: 1px solid {c["line"]}; }}
     QFrame#Card {{ background: {c["surface"]}; border: 1px solid {c["line"]}; border-radius: 14px; }}
     QFrame#Card QLabel, QFrame#Card QWidget {{ background: transparent; }}
+    QFrame#Card QFrame#PlateItem {{ background: {c["raised"]}; border: 1px solid {c["line"]};
+        border-radius: 10px; }}
+    QFrame#Card QFrame#PlateItem[locked="true"] {{ border-left: 3px solid {c["accent"]}; }}
     QFrame#Header QLabel, QFrame#Footer QLabel {{ background: transparent; }}
     QLabel[role="muted"] {{ color: {c["muted"]}; }}
     QFrame#Card QLabel[role="chip"] {{ background: {c["text"]}; color: {c["bg"]}; border-radius: 6px;

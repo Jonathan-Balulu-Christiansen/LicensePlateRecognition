@@ -26,7 +26,6 @@ from PySide6.QtWidgets import (
     QComboBox,
     QFileDialog,
     QFrame,
-    QGridLayout,
     QHBoxLayout,
     QHeaderView,
     QLabel,
@@ -46,6 +45,7 @@ from pipeline import (
     DEFAULT_READER,
     GATE_LOG,
     INFER_IMGSZ,
+    MAX_PANEL_PLATES,
     READ_EVERY_N_FRAMES,
     FrameInfo,
     FrameStats,
@@ -187,28 +187,6 @@ def set_role(label: QLabel, role: str) -> None:
     label.style().unpolish(label)
     label.style().polish(label)
     label.updateGeometry()  # the new role may add padding: let the layout re-measure it
-
-
-class KeyValueGrid(QGridLayout):
-    """Two columns: a muted name on the left, a value on the right."""
-
-    def __init__(self) -> None:
-        """An empty grid; add rows with row()."""
-        super().__init__()
-        self.setHorizontalSpacing(12)
-        self.setVerticalSpacing(8)
-        self.setColumnStretch(0, 1)
-
-    def row(self, name: str, mono: bool = True) -> QLabel:
-        """Add a row and return its value label."""
-        line = self.rowCount()
-        self.addWidget(muted_label(name), line, 0)
-        value = QLabel("—")
-        value.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-        if mono:
-            value.setFont(theme.mono_font())
-        self.addWidget(value, line, 1)
-        return value
 
 
 class VideoView(QWidget):
@@ -382,10 +360,10 @@ class PlateBadge(QWidget):
     """The read number drawn as a plate: an Israeli one (blue IL strip, yellow body) when
     the origin is IL, a plain light plate otherwise, a dashed outline when empty."""
 
-    def __init__(self) -> None:
-        """Start empty."""
+    def __init__(self, height: int = 76) -> None:
+        """Start empty, `height` px tall."""
         super().__init__()
-        self.setMinimumHeight(76)
+        self.setFixedHeight(height)
         self._number = ""
         self._code = ""
         self._dim = False
@@ -440,10 +418,10 @@ class PlateBadge(QWidget):
 class FlagIcon(QWidget):
     """The country's flag — Israel's for 'IL', a neutral '?' tile otherwise."""
 
-    def __init__(self) -> None:
-        """Fixed 44x32, unknown until set_code()."""
+    def __init__(self, width: int = 44, height: int = 32) -> None:
+        """Fixed size, unknown until set_code()."""
         super().__init__()
-        self.setFixedSize(44, 32)
+        self.setFixedSize(width, height)
         self._code = ""
 
     def set_code(self, code: str) -> None:
@@ -479,6 +457,160 @@ class FlagIcon(QWidget):
             left = QPointF(cx - r * 0.866, cy + sign * r / 2)
             right = QPointF(cx + r * 0.866, cy + sign * r / 2)
             painter.drawPolygon(QPolygonF([apex, left, right]))
+
+
+class CropView(QWidget):
+    """The plate as the camera saw it: the latest crop, fitted and centred, with rounded corners."""
+
+    def __init__(self, height: int) -> None:
+        """Fixed height; the width follows the card."""
+        super().__init__()
+        self.setFixedHeight(height)
+        self._image: QImage | None = None
+
+    def set_image(self, image: QImage | None) -> None:
+        """Show `image` (None: an empty frame)."""
+        self._image = image
+        self.update()
+
+    def paintEvent(self, event) -> None:  # noqa: N802 - Qt override name
+        """Draw the crop scaled to fit, or a dashed placeholder."""
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+        rect = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
+        if self._image is None or self._image.isNull():
+            painter.setPen(QPen(QColor(C["line"]), 1, Qt.PenStyle.DashLine))
+            painter.drawRoundedRect(rect, 6, 6)
+            return
+        scale = min(rect.width() / self._image.width(), rect.height() / self._image.height())
+        w, h = self._image.width() * scale, self._image.height() * scale
+        target = QRectF(rect.center().x() - w / 2, rect.center().y() - h / 2, w, h)
+        clip = QPainterPath()
+        clip.addRoundedRect(target, 6, 6)
+        painter.setClipPath(clip)
+        painter.drawImage(target, self._image)
+        painter.setClipping(False)
+        painter.setPen(QPen(QColor(C["line"]), 1))
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawRoundedRect(target, 6, 6)
+
+
+class PlateItem(QFrame):
+    """One plate in the side panel, on a compact card so several fit:
+
+        ID 3 · 6 reads                         [LOCKED 5/5]
+        [the plate as the camera saw it]  ->  [the number read]
+        [1][2][3][4][5][6][7][8]   each digit with its confidence
+        [flag] Israel · 8 digits              read 0.997 · det 0.90
+
+    A locked plate gets the accent edge; a digit the reader is unsure of (< 0.90) is marked.
+    """
+
+    LOW_CONFIDENCE = 0.90
+
+    def __init__(self) -> None:
+        """Build the empty card; show_plate() fills it."""
+        super().__init__()
+        self.setObjectName("PlateItem")
+        # A fixed height: the panel shows fewer cards on a short window instead of squeezing them.
+        self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(12, 9, 12, 10)
+        layout.setSpacing(7)
+
+        header = QHBoxLayout()
+        header.setSpacing(6)
+        self.track_label = QLabel("")
+        self.track_label.setFont(theme.mono_font(8.5))
+        self.reads_label = muted_label("", theme.mono_font(8.5))
+        header.addWidget(self.track_label)
+        header.addWidget(self.reads_label)
+        header.addStretch(1)
+        self.chip = QLabel("")
+        self.chip.setFont(theme.label_font(7.5))
+        self.chip.setContentsMargins(6, 2, 6, 2)  # QSS padding is not applied to this label
+        header.addWidget(self.chip)
+        layout.addLayout(header)
+
+        plate_row = QHBoxLayout()
+        plate_row.setSpacing(8)
+        self.crop_view = CropView(40)
+        self.crop_view.setToolTip("The plate as the camera saw it")
+        plate_row.addWidget(self.crop_view, 9)
+        arrow = muted_label("→", theme.ui_font(12))
+        plate_row.addWidget(arrow)
+        self.badge = PlateBadge(height=40)
+        self.badge.setToolTip("The number the reader made of it")
+        plate_row.addWidget(self.badge, 11)
+        layout.addLayout(plate_row)
+
+        digits = QHBoxLayout()
+        digits.setSpacing(3)
+        self.digit_cells: list[tuple[QFrame, QLabel, QLabel]] = []
+        for _ in range(8):
+            cell = QFrame()
+            cell.setStyleSheet(f"background: {C['surface']}; border-radius: 5px;")
+            cell_layout = QVBoxLayout(cell)
+            cell_layout.setContentsMargins(0, 3, 0, 3)
+            cell_layout.setSpacing(0)
+            digit = QLabel("")
+            digit.setFont(theme.mono_font(10.5))
+            confidence = muted_label("", theme.mono_font(6.5))
+            for label in (digit, confidence):
+                label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                label.setStyleSheet("background: transparent;")
+                cell_layout.addWidget(label)
+            digits.addWidget(cell)
+            self.digit_cells.append((cell, digit, confidence))
+        layout.addLayout(digits)
+
+        footer = QHBoxLayout()
+        footer.setSpacing(8)
+        self.flag = FlagIcon(24, 17)
+        footer.addWidget(self.flag)
+        self.origin_label = QLabel("")
+        self.origin_label.setFont(theme.ui_font(9))
+        footer.addWidget(self.origin_label, 1)
+        self.scores_label = muted_label("", theme.mono_font(8))
+        self.scores_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        self.scores_label.setToolTip("read: product of the per-digit confidences, the reader's own score\n"
+                                     "for the whole number · det: detector confidence")
+        footer.addWidget(self.scores_label)
+        layout.addLayout(footer)
+
+    def show_plate(self, plate: PlateView) -> None:
+        """Fill the card from one PlateView."""
+        if self.property("locked") != plate.locked:
+            self.setProperty("locked", plate.locked)  # the accent edge, see theme.stylesheet()
+            self.style().unpolish(self)
+            self.style().polish(self)
+        self.track_label.setText(f"ID {plate.track_id}")
+        self.reads_label.setText(f"· {plate.reads} reads" if plate.visible else "· out of view")
+        if plate.locked:
+            self.chip.setText(f"LOCKED {plate.votes}/{plate.min_votes}")
+            set_role(self.chip, "chip")
+        else:
+            self.chip.setText(f"READING {plate.votes}/{plate.min_votes}")
+            set_role(self.chip, "chipReading")
+        self.crop_view.set_image(plate.crop)
+        self.badge.set_plate(plate.number, plate.origin.code, dim=not plate.locked)
+        for index, (cell, digit, confidence) in enumerate(self.digit_cells):
+            has_digit = index < len(plate.number)
+            cell.setVisible(has_digit)
+            if has_digit:
+                digit.setText(plate.number[index])
+                conf = plate.digit_confs[index] if index < len(plate.digit_confs) else 0.0
+                confidence.setText(confidence_text(conf))
+                set_role(confidence, "error" if conf < self.LOW_CONFIDENCE else "muted")
+        origin = plate.origin
+        self.flag.set_code(origin.code)
+        country = origin.country if origin.code else "Origin unknown"
+        self.origin_label.setText(f"{country} · {len(plate.number)} digits")
+        layout = plate_format_label(plate.number, origin.code)
+        self.origin_label.setToolTip(f"{layout}\n{origin.method} ({origin.score:.2f})" if origin.code else layout)
+        score = f"{math.prod(plate.digit_confs):.3f}" if plate.digit_confs else "—"
+        self.scores_label.setText(f"read {score} · det {plate.detector_conf:.2f}")
 
 
 class Sparkline(QWidget):
@@ -568,6 +700,7 @@ class MainWindow(QWidget):
     """
 
     SIDE_MIN, SIDE_MAX, SIDE_SHARE = 360, 500, 0.25
+    PASSAGES_MIN = 170  # px the passages card keeps: its title, the header and two rows
     INLINE_SPARKLINE_FROM = 1000  # px of left-column width
 
     def __init__(self) -> None:
@@ -578,6 +711,7 @@ class MainWindow(QWidget):
         self.setMinimumSize(1100, 720)
         self.worker: VideoWorker | None = None
         self._logged = 0
+        self._plates: list[PlateView] = []
 
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
@@ -615,6 +749,7 @@ class MainWindow(QWidget):
             else:
                 self.spark_row.addWidget(self.sparkline)
             self.spark_row_widget.setVisible(not inline)
+        self._show_plates(self._plates)  # the height may now hold more or fewer plate cards
 
     def _toggle_fullscreen(self) -> None:
         """F11 / the header button: full screen and back."""
@@ -737,74 +872,33 @@ class MainWindow(QWidget):
         return column
 
     def _build_side_panel(self) -> QWidget:
-        """Current plate, origin, and the passages table, which takes the rest of the height."""
+        """The plates in view (one compact card each), and the passages table below them,
+        which takes the rest of the height."""
         panel = QWidget()
         self.side_panel = panel
         panel.setFixedWidth(self.SIDE_MIN)
         column = QVBoxLayout(panel)
+        self.side_column = column
         column.setContentsMargins(0, 0, 0, 0)
         column.setSpacing(16)
 
-        plate = Card("CURRENT PLATE")
-        self.plate_card = plate
-        self.plate_chip = QLabel("")
-        self.plate_chip.setFont(theme.label_font())
-        self.plate_chip.setContentsMargins(8, 3, 8, 3)  # QSS padding is not applied to this label
-        plate.title_row.addWidget(self.plate_chip)
-        self.plate_badge = PlateBadge()
-        plate.body.addWidget(self.plate_badge)
-        digits = QHBoxLayout()
-        digits.setSpacing(4)
-        self.digit_cells: list[tuple[QFrame, QLabel, QLabel]] = []
-        for _ in range(8):
-            cell = QFrame()
-            cell.setStyleSheet(f"background: {C['raised']}; border-radius: 6px;")
-            layout = QVBoxLayout(cell)
-            layout.setContentsMargins(0, 5, 0, 5)
-            layout.setSpacing(1)
-            digit = QLabel("")
-            digit.setFont(theme.mono_font(13))
-            confidence = muted_label("", theme.mono_font(7.5))
-            for label in (digit, confidence):
-                label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-                label.setStyleSheet("background: transparent;")
-                layout.addWidget(label)
-            digits.addWidget(cell)
-            self.digit_cells.append((cell, digit, confidence))
-        plate.body.addLayout(digits)
-        grid = KeyValueGrid()
-        self.read_score_value = grid.row("Read score")
-        self.detector_value = grid.row("Detector confidence")
-        self.reads_value = grid.row("Reads → agreeing")
-        self.read_score_value.setToolTip("Product of the per-digit confidences: the reader's own score\n"
-                                        "for the whole number, not a measured probability that it is right.")
-        plate.body.addLayout(grid)
-        # The two detail cards keep their natural height; only the passages card stretches.
-        plate.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
-        column.addWidget(plate)
-
-        origin = Card("ORIGIN")
-        country_row = QHBoxLayout()
-        country_row.setSpacing(14)
-        self.flag = FlagIcon()
-        country_row.addWidget(self.flag)
-        names = QVBoxLayout()
-        names.setSpacing(0)
-        self.country_label = QLabel("—")
-        self.country_label.setFont(theme.ui_font(15, QFont.Weight.DemiBold))
-        self.format_label = muted_label("")
-        names.addWidget(self.country_label)
-        names.addWidget(self.format_label)
-        country_row.addLayout(names, 1)
-        origin.body.addLayout(country_row)
-        grid = KeyValueGrid()
-        self.method_value = grid.row("Method", mono=False)
-        planned = grid.row("Flag / pattern model", mono=False)
-        planned.setText("planned")
-        planned.setProperty("role", "muted")
-        origin.body.addLayout(grid)
-        origin.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
-        column.addWidget(origin)
+        plates = Card("PLATES IN VIEW")
+        self.plates_card = plates
+        plates.body.setSpacing(10)
+        self.plates_count = muted_label("", theme.mono_font(8.5))
+        plates.title_row.addWidget(self.plates_count)
+        self.no_plate_label = muted_label("No plate read yet")
+        self.no_plate_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.no_plate_label.setMinimumHeight(64)
+        plates.body.addWidget(self.no_plate_label)
+        self.plate_items = [PlateItem() for _ in range(MAX_PANEL_PLATES)]
+        for item in self.plate_items:
+            item.setVisible(False)
+            plates.body.addWidget(item)
+        # The plates card keeps its natural height (it grows with the plates shown);
+        # the passages card takes whatever is left.
+        plates.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+        column.addWidget(plates)
 
         passages = Card("RECENT PASSAGES")
         self.logged_value = muted_label("0 logged", theme.mono_font(8.5))
@@ -812,7 +906,7 @@ class MainWindow(QWidget):
         self.passages = PassagesTable()
         passages.body.addWidget(self.passages, 1)
         column.addWidget(passages, 1)
-        self._show_plate(None)
+        self._show_plates([])
         return panel
 
     def _build_footer(self) -> QFrame:
@@ -887,7 +981,7 @@ class MainWindow(QWidget):
         self.video.clear()
         self.video.set_source(f"LIVE · {name}" if camera else f"FILE · {name}", live=True)
         self.sparkline.clear()
-        self._show_plate(None)
+        self._show_plates([])
 
         self.worker = VideoWorker(source, Path(detector), Path(reader), self.votes_spin.value())
         self.worker.frame_ready.connect(self._on_frame)
@@ -945,53 +1039,32 @@ class MainWindow(QWidget):
             self.stage_labels["fps"].setText(f"{stats.fps:.1f}")
             self.sparkline.add(stats.last_frame_ms, stats.source_fps)
         self.stage_labels["tracks"].setText(str(sum(1 for t in info.tracks if t.track_id is not None)))
-        self._show_plate(info.focus)
+        self._show_plates(info.plates)
 
-    def _show_plate(self, plate: PlateView | None) -> None:
-        """Fill the Current plate and Origin cards (or reset them)."""
-        if plate is None or not plate.number:
-            self.plate_card.title.setText("CURRENT PLATE")
-            self.plate_badge.set_plate("", "")
-            self.plate_chip.setText("")
-            set_role(self.plate_chip, "")
-            for cell, digit, confidence in self.digit_cells:
-                cell.setVisible(True)
-                digit.setText("·")
-                confidence.setText("")
-            reads = f"{plate.reads} → 0" if plate else "—"
-            for label, text in ((self.read_score_value, "—"), (self.detector_value, "—"), (self.reads_value, reads)):
-                label.setText(text)
-            self.flag.set_code("")
-            self.country_label.setText("—")
-            self.format_label.setText("")
-            self.method_value.setText("plate color" if plate is None else "reading…")
-            return
+    def _plate_capacity(self) -> int:
+        """How many plate cards fit at full size above the passages card (at least one)."""
+        item = self.plate_items[0].sizeHint().height()
+        spacing = self.plates_card.body.spacing()
+        margins = self.plates_card.body.contentsMargins()
+        chrome = margins.top() + margins.bottom() + self.plates_card.title.sizeHint().height() + spacing
+        free = self.side_panel.height() - self.side_column.spacing() - self.PASSAGES_MIN - chrome
+        return max(1, min(len(self.plate_items), (free + spacing) // (item + spacing)))
 
-        suffix = "" if plate.visible else " · gone"
-        self.plate_card.title.setText(f"CURRENT PLATE · ID {plate.track_id}{suffix}")
-        self.plate_badge.set_plate(plate.number, plate.origin.code, dim=not plate.locked)
-        if plate.locked:
-            self.plate_chip.setText(f"LOCKED {plate.votes}/{plate.min_votes}")
-            set_role(self.plate_chip, "chip")
-        else:
-            self.plate_chip.setText(f"READING {plate.votes}/{plate.min_votes}")
-            set_role(self.plate_chip, "chipReading")
-        for index, (cell, digit, confidence) in enumerate(self.digit_cells):
-            has_digit = index < len(plate.number)
-            cell.setVisible(has_digit)
-            if has_digit:
-                digit.setText(plate.number[index])
-                conf = plate.digit_confs[index] if index < len(plate.digit_confs) else 0.0
-                confidence.setText(confidence_text(conf))
-        score = math.prod(plate.digit_confs)
-        self.read_score_value.setText(f"{score:.3f}" if plate.digit_confs else "—")
-        self.detector_value.setText(f"{plate.detector_conf:.2f}")
-        self.reads_value.setText(f"{plate.reads} → {plate.votes}")
-        origin = plate.origin
-        self.flag.set_code(origin.code)
-        self.country_label.setText(origin.country)
-        self.format_label.setText(plate_format_label(plate.number, origin.code))
-        self.method_value.setText(f"{origin.method} ({origin.score:.2f})")
+    def _show_plates(self, plates: list[PlateView]) -> None:
+        """One card per plate in view, in the order they appeared, as many as the height holds
+        (locked plates first, then the furthest along); unused cards are hidden."""
+        self._plates = plates
+        capacity = self._plate_capacity()
+        shown = sorted(plates, key=lambda p: (p.locked, p.votes), reverse=True)[:capacity]
+        shown.sort(key=lambda p: p.track_id)
+        for item, plate in zip(self.plate_items, [*shown, *[None] * len(self.plate_items)]):
+            if plate is not None:
+                item.show_plate(plate)
+            item.setVisible(plate is not None)
+        self.no_plate_label.setVisible(not plates)
+        locked = sum(plate.locked for plate in plates)
+        hidden = f" · {len(shown)} shown" if len(shown) < len(plates) else ""
+        self.plates_count.setText(f"{len(plates)} · {locked} locked{hidden}" if plates else "")
 
     def _on_plate_locked(self, event: PlateEvent) -> None:
         """A number locked: add it to the top of the passages table."""
