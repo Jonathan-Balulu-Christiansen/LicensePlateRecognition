@@ -137,11 +137,11 @@ themselves when those are absent.
   - Real labelled plates are scarce.
   - Rendered plates follow the real Israeli layouts and numbering rules, and their labels are exact
     by construction.
-- **Synthetic scenes for the detector.**
+- **Synthetic scenes for the detector (optional).**
   - Image-generation models draw realistic vehicles with **blank** plates, since they cannot be
     trusted to print exact digits.
   - Realistic numbers are then printed onto those plates in the right perspective and light.
-  - Validation and test data stay real only.
+  - They can be added to the training set only; validation and test data stay real.
 - **Train the detector at its pretraining and inference size (640).** One size from pretraining
   to deployment.
 - **No rotation or shear augmentation for the detector.**

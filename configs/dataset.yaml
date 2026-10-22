@@ -2,10 +2,10 @@ path: ../data/detector
 train: images/train
 val: images/val
 test: images/test
-# Extra training-only folders (synthetic scenes); added to `train` for Ultralytics by
-# common.resolved_dataset_yaml. val and test stay real images only.
-train_extra:
-  - images/synth
+# Optional training-only folders (e.g. synthetic scenes), added to `train` for Ultralytics by
+# common.resolved_dataset_yaml; val and test stay real images only. Example:
+# train_extra:
+#   - images/synth
 
 names:
   0: license_plate
