@@ -1,0 +1,14 @@
+# git is set to core.autocrlf=true on this machine, so without this file the line endings
+# stored in a commit depend on the machine that made it. Normalising to LF in the repository
+# keeps that decision here instead, so a file never shows up as "modified" purely because it
+# was checked out somewhere else.
+* text=auto eol=lf
+
+# Binary assets: never touch these.
+*.png binary
+*.jpg binary
+*.pdf binary
+*.mp4 binary
+*.pt binary
+*.keras binary
+*.ico binary

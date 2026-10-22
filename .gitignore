@@ -1,0 +1,22 @@
+# Git holds code, tests, configuration and documentation only.
+# Data, models and outputs live in the project folder but are never committed: the images,
+# videos and plate numbers are not meant to be published, and the models are large.
+data/
+weights/
+runs/
+reports/
+*.pt
+*.onnx
+*.engine
+*.keras
+
+# Python and tool caches
+__pycache__/
+.venv/
+.ruff_cache/
+.pytest_cache/
+
+# Local machine files
+.env
+.DS_Store
+Thumbs.db
