@@ -11,9 +11,14 @@ digits, and the number is confirmed by voting over several frames.
 Israeli civilian plates carry digits only (7 or 8), so the reader's decoding is constrained to
 exactly those two formats.
 
+![Visus reading four plates at once on a synthetic street scene](assets/screenshots/visus-live.png)
+
+<sub>A synthetic scene: the vehicles are AI-generated and every plate number is fictional.</sub>
+
 > **No real license plates.** Every plate number in this repository — in the code, tests,
-> documentation and examples — is fictional and does not belong to a real vehicle. The
-> repository contains no images, video or plate data, and no trained models.
+> documentation, examples and the screenshot — is fictional and does not belong to a real
+> vehicle. The repository contains no real images, video or plate data, and no trained models;
+> its only image of a street is the synthetic scene above.
 
 ## How it works
 
@@ -103,10 +108,6 @@ The app loads `weights/detector/best.pt` and `weights/reader/plate_reader.keras`
 ```bash
 python src/app.py
 ```
-
-![Visus reading four plates at once on a synthetic street scene](assets/screenshots/visus-live.png)
-
-<sub>A synthetic scene: the vehicles are AI-generated and every plate number is fictional.</sub>
 
 Pick a **Source** (a camera, or *Video file…*), a **Detector** and a **Reader** (the promoted
 models, every training run, or any file), and the number of agreeing **Votes** needed to lock a
