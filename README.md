@@ -1,4 +1,4 @@
-# Visus — Real-Time Israeli License Plate Recognition
+# Real-Time License Plate Recognition
 
 <img src="assets/branding/visus_icon.png" width="72" align="right" alt="Visus app icon">
 
