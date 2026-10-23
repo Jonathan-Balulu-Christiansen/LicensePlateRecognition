@@ -1,11 +1,12 @@
 """Deterministically re-split the YOLO plate dataset into train/val/test.
 
 A pristine pool (``data/detector/pool/``) is the single source of truth: it
-holds every image+label pair and is never modified by a re-split. The working
-split folders (``images/{train,val,test}`` + ``labels/{train,val,test}``) are
-treated as a disposable, derived copy -- on every run they are cleared and
-re-populated from the pool. This means re-splitting is always safe and never
-destroys data.
+holds every image+label pair and is never modified by a re-split. Each split
+folder holds one subfolder per source; this tool owns ``photos/``
+(``images/{train,val,test}/photos`` + ``labels/{train,val,test}/photos``), a
+disposable, derived copy -- on every run it is cleared and re-populated from the
+pool. Other sources (``video/``, written by tools/export_harvest.py) are left
+alone. This means re-splitting is always safe and never destroys data.
 
 The assignment is reproducible and idempotent: pairs are sorted by stem (so the
 result is independent of where a file currently lives) and shuffled with a fixed
@@ -39,6 +40,8 @@ from common import (
     resolve_project_path,
 )
 
+SOURCE = "photos"  # the subfolder of each split that this tool owns
+
 
 @dataclass
 class Pair:
@@ -57,6 +60,12 @@ def split_dirs(dataset_root: Path, config: dict[str, Any], split: str) -> tuple[
     image_dir = (dataset_root / str(image_dir_value)).resolve()
     label_dir = infer_label_dir(dataset_root, str(image_dir_value))
     return image_dir, label_dir
+
+
+def photo_dirs(dataset_root: Path, config: dict[str, Any], split: str) -> tuple[Path, Path]:
+    """Return the (images, labels) folders this tool owns inside a split: the photos/ subfolder."""
+    image_dir, label_dir = split_dirs(dataset_root, config, split)
+    return image_dir / SOURCE, label_dir / SOURCE
 
 
 def pool_dirs(dataset_root: Path) -> tuple[Path, Path]:
@@ -97,7 +106,7 @@ def gather_split_pairs(dataset_root: Path, config: dict[str, Any]) -> tuple[list
     by_stem: dict[str, Pair] = {}
     orphans: list[str] = []
     for split in SPLITS:
-        image_dir, label_dir = split_dirs(dataset_root, config, split)
+        image_dir, label_dir = photo_dirs(dataset_root, config, split)
         pairs, split_orphans = pairs_in(image_dir, label_dir)
         orphans.extend(split_orphans)
         for pair in pairs:
@@ -161,9 +170,9 @@ def assign_splits(
 
 
 def clear_working_splits(dataset_root: Path, config: dict[str, Any]) -> None:
-    """Remove image/label files from the derived split dirs (never the pool)."""
+    """Remove image/label files from the derived photos/ split dirs (never the pool)."""
     for split in SPLITS:
-        image_dir, label_dir = split_dirs(dataset_root, config, split)
+        image_dir, label_dir = photo_dirs(dataset_root, config, split)
         for directory, suffixes in ((image_dir, IMAGE_EXTENSIONS), (label_dir, {".txt"})):
             if not directory.exists():
                 continue
@@ -179,7 +188,7 @@ def populate_splits(
     config: dict[str, Any],
 ) -> int:
     """Copy each pool pair into its assigned split folder."""
-    target_dirs = {split: split_dirs(dataset_root, config, split) for split in SPLITS}
+    target_dirs = {split: photo_dirs(dataset_root, config, split) for split in SPLITS}
     for image_dir, label_dir in target_dirs.values():
         image_dir.mkdir(parents=True, exist_ok=True)
         label_dir.mkdir(parents=True, exist_ok=True)
@@ -197,9 +206,9 @@ def clear_label_caches(dataset_root: Path, config: dict[str, Any]) -> None:
     """Stale Ultralytics .cache files must go; they are rebuilt on next train/val."""
     for split in SPLITS:
         _, label_dir = split_dirs(dataset_root, config, split)
-        cache_file = label_dir.with_name(f"{label_dir.name}.cache")
-        if cache_file.exists():
-            cache_file.unlink()
+        # Ultralytics names the cache after the folder of the first label file it reads.
+        for cache_file in [*label_dir.glob("*.cache"), label_dir.with_name(f"{label_dir.name}.cache")]:
+            cache_file.unlink(missing_ok=True)
 
 
 def write_manifest(

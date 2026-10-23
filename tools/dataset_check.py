@@ -67,17 +67,17 @@ def selected_splits(split: str) -> tuple[str, ...]:
 
 
 def list_images(image_dir: Path) -> list[Path]:
-    """List the image files in a folder, sorted."""
+    """List the image files in a split folder and its source subfolders, sorted."""
     return sorted(
         path
-        for path in image_dir.iterdir()
+        for path in image_dir.rglob("*")
         if path.is_file() and path.suffix.lower() in IMAGE_EXTENSIONS
     )
 
 
 def list_labels(label_dir: Path) -> list[Path]:
-    """List the .txt label files in a folder, sorted."""
-    return sorted(path for path in label_dir.iterdir() if path.is_file() and path.suffix.lower() == ".txt")
+    """List the .txt label files in a split folder and its source subfolders, sorted."""
+    return sorted(path for path in label_dir.rglob("*") if path.is_file() and path.suffix.lower() == ".txt")
 
 
 def add_issue(
@@ -275,21 +275,25 @@ def validate_split(
     if not images:
         add_issue(issues, split, image_dir, label_dir, "warning", "No images found in split.")
 
-    image_by_stem = {image.stem: image for image in images}
-    label_by_stem = {label.stem: label for label in labels}
+    # An image and its label sit at the same relative path under images/<split> and labels/<split>.
+    image_by_key = {image.relative_to(image_dir).with_suffix(""): image for image in images}
+    label_by_key = {label.relative_to(label_dir).with_suffix(""): label for label in labels}
+
+    def label_of(image: Path) -> Path | None:
+        return label_by_key.get(image.relative_to(image_dir).with_suffix(""))
 
     for image in images:
-        label = label_dir / f"{image.stem}.txt"
-        if not label.exists():
+        if label_of(image) is None:
+            label = label_dir / image.relative_to(image_dir).with_suffix(".txt")
             add_issue(issues, split, image, label, "error", "Image has no matching label file.")
 
-    for label in labels:
-        if label.stem not in image_by_stem:
+    for key, label in label_by_key.items():
+        if key not in image_by_key:
             add_issue(issues, split, "", label, "error", "Label file has no matching image file.")
 
     preview_candidates = images[: max(0, max_images)]
     for index, image in enumerate(preview_candidates, start=1):
-        label = label_by_stem.get(image.stem)
+        label = label_of(image)
         if label is None:
             continue
 
@@ -303,7 +307,7 @@ def validate_split(
     for image in images[max(0, max_images) :]:
         if cv2.imread(str(image)) is None:
             add_issue(issues, split, image, "", "error", "Image could not be read (corrupt or unsupported).")
-        label = label_by_stem.get(image.stem)
+        label = label_of(image)
         if label is not None:
             parse_label_file(label, split, image, issues)
 

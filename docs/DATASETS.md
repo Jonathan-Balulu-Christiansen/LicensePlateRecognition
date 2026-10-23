@@ -24,9 +24,10 @@ The commands below are run from the project root. Every tool prints its options 
 data/detector/
   pool/images/      every labelled image   (the source of truth; never modified by a split)
   pool/labels/      one .txt per image, same name
-  images/{train,val,test}/   derived by split_dataset.py
-  labels/{train,val,test}/
-  images/synth/  labels/synth/   optional synthetic scenes (training only, see section 3)
+  images/{train,val,test}/<source>/   one subfolder per source; every subfolder is read
+  labels/{train,val,test}/<source>/   (same layout: an image's label is at the same relative path)
+    photos/        the labelled stills, derived from the pool by split_dataset.py
+    synthetic/     optional synthetic scenes (train only, see section 3)
 ```
 
 `configs/dataset.yaml` points at this folder. A label file has one line per plate, in YOLO
@@ -163,8 +164,8 @@ colour. The output folder `<batch>_numbered/` holds:
 - the manifest, with each plate's number and its vehicle's make, model and colour.
 
 **3. Use them for training only.** Copy the numbered images and labels to
-`data/detector/images/synth/` and `labels/synth/`. `configs/dataset.yaml` lists that folder under
-`train_extra`, which is added to the training set only. Validation and test stay real.
+`data/detector/images/train/synthetic/` and `labels/train/synthetic/`: every subfolder of a split is
+read. Validation and test stay real.
 
 ---
 

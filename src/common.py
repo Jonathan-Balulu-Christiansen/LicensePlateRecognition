@@ -64,24 +64,9 @@ def resolved_dataset_yaml(dataset_yaml: Path, out_dir: Path) -> Path:
     its global `datasets_dir` setting, which on the dev machine only happened to land on
     the same folder. Training and validation get this resolved copy, so the project can
     be moved or cloned anywhere.
-
-    Optional `train_extra` / `val_extra` lists (more folders for those splits, e.g. harvested
-    video frames) are merged into `train` / `val` here, so the other tools keep reading each
-    split as one folder. An extra folder that does not exist (data not built on this machine) is
-    skipped with a note. The test split is never extended.
     """
     config = load_dataset_yaml(dataset_yaml)
-    root = resolve_dataset_root(dataset_yaml, config)
-    config["path"] = root.as_posix()
-    for split in ("train", "val"):
-        extra = []
-        for folder in config.pop(f"{split}_extra", None) or []:
-            if (root / folder).is_dir():
-                extra.append(folder)
-            else:
-                print(f"note: {split}_extra folder {folder} not found, skipped")
-        if extra:
-            config[split] = [config[split], *extra]
+    config["path"] = resolve_dataset_root(dataset_yaml, config).as_posix()
     out_dir.mkdir(parents=True, exist_ok=True)
     resolved = out_dir / f"{dataset_yaml.stem}.resolved.yaml"
     resolved.write_text(yaml.safe_dump(config, sort_keys=False, allow_unicode=True), encoding="utf-8")

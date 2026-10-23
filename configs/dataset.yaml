@@ -1,15 +1,11 @@
 path: ../data/detector
+# Each split folder holds one subfolder per source, and every subfolder is read:
+#   photos/  the labelled stills (tools/split_dataset.py, from pool/)
+#   video/   frames from driving videos (tools/export_harvest.py; train and val only)
+# Another source (e.g. synthetic scenes) can be added as one more subfolder of train/.
 train: images/train
 val: images/val
 test: images/test
-# Extra folders for train / val, added for Ultralytics by common.resolved_dataset_yaml (the other
-# tools read the base split only). The test split is never extended.
-# harvest_*: frames harvested from driving videos (skipped when absent). images/synth (synthetic
-# scenes) can be added to train_extra too; it is out for now.
-train_extra:
-  - images/harvest_train
-val_extra:
-  - images/harvest_val
 
 names:
   0: license_plate
