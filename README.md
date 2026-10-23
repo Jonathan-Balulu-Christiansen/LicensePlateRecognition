@@ -86,11 +86,17 @@ Data and trained models are not part of this repository. The code expects them i
 Requirements: Python 3.12. A CUDA GPU is recommended for training and for real-time use.
 Everything also runs on the CPU, more slowly.
 
-```bash
+The commands call the Python inside the virtual environment directly, so no activation step is needed.
+Windows, cmd or PowerShell:
+
+```bat
 python -m venv .venv
-.venv\Scripts\activate            # Linux / macOS: source .venv/bin/activate
-pip install -r requirements.txt
+.venv\Scripts\python -m pip install -r requirements.txt
 ```
+
+In Git Bash, write the same path with forward slashes, `.venv/Scripts/python`. On Linux or macOS it is
+`.venv/bin/python` (create the environment with `python3 -m venv .venv`). Every command below is written for
+cmd and PowerShell.
 
 `requirements.txt` pins the direct dependencies, with the CUDA 12.1 PyTorch build. On a machine
 without a GPU, remove the `+cu121` suffixes and the extra index line.
@@ -105,8 +111,8 @@ The app loads `weights/detector/best.pt` and `weights/reader/plate_reader.keras`
 
 **Run the app:**
 
-```bash
-python src/app.py
+```bat
+.venv\Scripts\python src/app.py
 ```
 
 Pick a **Source** (a camera, or *Video file…*), a **Detector** and a **Reader** (the promoted
@@ -132,13 +138,15 @@ score of the whole number.
 
 ## Tests and code quality
 
-```bash
-pip install -r requirements-dev.txt
-pytest                 # fast suite
-pytest -m slow         # end to end on a local clip (see docs/RUNBOOK.md)
-ruff check src tools tests
-pyright src tools tests
+```bat
+.venv\Scripts\python -m pip install -r requirements-dev.txt
+.venv\Scripts\python -m pytest
+.venv\Scripts\python -m pytest -m slow
+.venv\Scripts\python -m ruff check src tools tests
+.venv\Scripts\python -m pyright src tools tests
 ```
+
+The first `pytest` line is the fast suite; `-m slow` runs end to end on a local clip (see docs/RUNBOOK.md).
 
 Settings for all three tools are in `pyproject.toml`. Tests that need models or data skip
 themselves when those are absent.
