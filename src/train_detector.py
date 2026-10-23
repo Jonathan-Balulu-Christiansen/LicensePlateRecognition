@@ -161,7 +161,7 @@ def main() -> None:
     # Output folder under runs/train/. To put a newly trained model into service, copy its
     # weights/best.pt to weights/detector/best.pt — that promoted copy is what the app loads
     # by default (the app's Detector list also offers every run directly).
-    run_name = "plate_yolo26m_img640_cam"
+    run_name = "plate_yolo26m_img640_harvest"
     device = "0"  # "0" = GPU, "cpu" = CPU
     train_params: dict[str, Any] = {
         "imgsz": 640,

@@ -2,10 +2,14 @@ path: ../data/detector
 train: images/train
 val: images/val
 test: images/test
-# Optional training-only folders (e.g. synthetic scenes), added to `train` for Ultralytics by
-# common.resolved_dataset_yaml; val and test stay real images only. Example:
-# train_extra:
-#   - images/synth
+# Extra folders for train / val, added for Ultralytics by common.resolved_dataset_yaml (the other
+# tools read the base split only). The test split is never extended.
+# harvest_*: frames harvested from driving videos (skipped when absent). images/synth (synthetic
+# scenes) can be added to train_extra too; it is out for now.
+train_extra:
+  - images/harvest_train
+val_extra:
+  - images/harvest_val
 
 names:
   0: license_plate
