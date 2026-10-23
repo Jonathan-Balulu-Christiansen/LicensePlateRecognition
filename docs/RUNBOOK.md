@@ -76,7 +76,7 @@ python src/train_reader.py --preview   # a sheet of augmented training samples
 for synthetic validation. The pretrained weights are stored under `runs/reader/pretrained/` and
 reused by later runs with the same settings.
 
-**Stage 2: fine-tuning.** The network trains on the real crops in `data/ocr/plates/`, with
+**Stage 2: fine-tuning.** The network trains on the real crops in `data/reader/plates/`, with
 synthetic plates mixed into every batch.
 
 **Output.** A run writes `runs/reader/<timestamp>/plate_reader.keras` and `metadata.json`. The

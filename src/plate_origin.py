@@ -14,7 +14,7 @@ How "yellow" is measured, and why (all numbers measured on this project's data):
 - Hue 10-40 on OpenCV's 0-180 scale: plate yellow drifts toward orange under headlights.
 - Per read, the yellow share of the colored pixels: 0.74-1.00 on the day clips, 0.32-1.00
   on usable night reads (every night track's median >= 0.6), 0.87+ on all 107 labelled
-  crops in data/ocr/plates; white, grey, blue and red plates score 0.
+  crops in data/reader/plates; white, grey, blue and red plates score 0.
 - Per track, the median over its usable reads, against a 0.5 threshold.
 Known blind spot: a white plate under orange sodium street light would read as yellow.
 """

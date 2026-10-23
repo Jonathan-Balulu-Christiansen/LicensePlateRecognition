@@ -84,9 +84,9 @@ python tools/dataset_check.py --split all           # format, normalisation, cro
 ### Real plate crops
 
 ```text
-data/ocr/plates/
-  12345601.jpg                       the file name is the label: the plate number
-  1234567_clip03_f00180.png          several crops of one plate: number, "_", anything unique
+data/reader/plates/                  any subfolders; every image in it is read
+  original/12345601.jpg              the file name is the label: the plate number
+  clip03/1234567_clip03_f00180.png   several crops of one plate: number, "_", anything unique
 ```
 
 - **Where crops come from.** Crop each plate from the detector images or from video, using the

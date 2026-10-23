@@ -4,7 +4,7 @@ Two stages, because real labelled plates are far too few for a 1.85M-parameter n
 their own:
 1. Pretrain on the synthetic plates in data/synthetic/plates/v1 (made by tools/synth_plates.py;
    two-row plates are left out — the reader reads one row).
-2. Fine-tune on every real plate in data/ocr/plates (file name = the number), half of every
+2. Fine-tune on every real plate in data/reader/plates (file name = the number), half of every
    batch real and half synthetic, so the network does not forget the synthetic variety.
 
 Augmentation is ONLINE: every batch is built fresh from the plate images on disk, so each epoch
@@ -46,7 +46,7 @@ from plate_reader import build_model, decode, encode, prep
 cv2.setNumThreads(0)  # OpenCV's thread pool crashes intermittently next to PyTorch in one process
 
 SYNTH_DIR = PROJECT_ROOT / "data" / "synthetic" / "plates" / "v1"
-REAL_DIR = PROJECT_ROOT / "data" / "ocr" / "plates"
+REAL_DIR = PROJECT_ROOT / "data" / "reader" / "plates"
 RUNS_DIR = PROJECT_ROOT / "runs" / "reader"
 LONG_TYPES = ("long_strip", "long_plain")
 PROGRESS: Any = 2  # Keras fit(verbose=2): one line per epoch (its stubs type verbose as str)
@@ -320,7 +320,7 @@ def synthetic_samples(cfg: dict) -> tuple[list[Sample], list[Sample]]:
 
 
 def real_samples() -> list[Sample]:
-    """Every labelled real plate crop in data/ocr/plates. The file name starts with the number:
+    """Every labelled real plate crop in data/reader/plates (any subfolder). The file name starts with the number:
     "12345678.jpg", or "12345678_<video>_f<frame>.png" for several crops of one plate."""
     paths = sorted(p for p in REAL_DIR.rglob("*") if p.suffix.lower() in (".jpg", ".jpeg", ".png"))
     return [(path, path.stem.split("_")[0], False, "real") for path in paths]
