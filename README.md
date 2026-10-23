@@ -171,7 +171,6 @@ themselves when those are absent.
 ## Known limitations
 
 - **Two-row plates** (motorcycles) are detected but not read: the reader reads a single row.
-- **The tall plate layout,** with the IL badge under the number, is not read reliably yet.
 - **A vehicle that is hidden and re-appears** gets a new track id, so it is logged twice.
 - **The read gate is in pixels** (90 px wide). It was tuned on 1080p video, so a lower-resolution
   camera needs the plate to fill more of the frame.
