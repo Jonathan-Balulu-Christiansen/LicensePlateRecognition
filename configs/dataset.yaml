@@ -1,7 +1,7 @@
 path: ../data/detector
 # Each split folder holds one subfolder per source, and every subfolder is read:
 #   photos/  the labelled stills (tools/split_dataset.py, from pool/)
-#   video/   frames from driving videos (tools/export_harvest.py; train and val only)
+#   video/   frames from driving videos (tools/export_harvest.py; test/ holds only the held-out test drives)
 # Another source (e.g. synthetic scenes) can be added as one more subfolder of train/.
 train: images/train
 val: images/val

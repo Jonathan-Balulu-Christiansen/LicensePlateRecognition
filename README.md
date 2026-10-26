@@ -40,6 +40,26 @@ CTC loss, which needs only the number string as a label: the network learns by i
 digit is. The network is pretrained on synthetic plates and fine-tuned on real crops. Keras 3 runs
 on the PyTorch backend, so TensorFlow is not needed.
 
+## Training data
+
+The real data comes from **8 hours of 4K driving video**: 11 drives through Israeli cities, by
+day, at night and in the rain. Every video is processed semi-automatically. The detector,
+tracker and reader run over it, and a plate is kept for the reader only when its number was
+voted across many frames. Every kept number is then checked by eye. One whole drive is held out
+as a test set and never trained on.
+
+| | Train | Validation | Test |
+|---|---|---|---|
+| Detector: video frames | 3,645 | 613 | 341 (held-out drive) |
+| Detector: labelled stills | 374 | 46 | 44 |
+| Detector: plate boxes | 8,599 | 1,427 | 818 |
+| Reader: real plate crops | 5,070 crops of 2,698 plates (5-fold, by plate) | | 424 crops of 217 plates (held-out drive) |
+| Reader: synthetic plates (pretraining) | 34,606 | 2,000 | |
+
+Detector frames are split by 10-second blocks of each video, so validation never sees the
+training cars. Boxes too small or too uncertain to label are painted over rather than left
+unlabelled.
+
 ## Evaluation
 
 - **Detector.** `train_detector.py` scores the best checkpoint once on a held-out test split. That
