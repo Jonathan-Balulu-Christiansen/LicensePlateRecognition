@@ -30,10 +30,10 @@ camera / video
   -> CNN+CTC reader          whole crop -> 7- or 8-digit number + per-digit confidence;
                              all plates of a frame in one batch
   -> temporal voting         lock the number once enough confident reads agree
-  -> plate origin            country from the plate colour (yellow -> Israel)
+  -> plate origin            country from the plate color (yellow -> Israel)
 ```
 
-**The reader.** The reader converts the crop to grey and resizes it to 48×192. A 2D CNN collapses the
+**The reader.** The reader converts the crop to gray and resizes it to 48×192. A 2D CNN collapses the
 height while keeping 48 columns along the plate. A residual stack of dilated 1D convolutions then
 gives every column a view of the whole plate. The network has 1.85 M parameters. It is trained with
 CTC loss, which needs only the number string as a label: the network learns by itself where each
@@ -42,23 +42,26 @@ on the PyTorch backend, so TensorFlow is not needed.
 
 ## Training data
 
-The real data comes from **8 hours of 4K driving video**: 11 drives through Israeli cities, by
-day, at night and in the rain. Every video is processed semi-automatically. The detector,
-tracker and reader run over it, and a plate is kept for the reader only when its number was
-voted across many frames. Every kept number is then checked by eye. One whole drive is held out
-as a test set and never trained on.
+The real data comes from **8 hours of driving footage**: eleven drives through Israeli cities, by
+day, at night and in the rain. Ten drives (7.4 hours) are used for training and
+validation. The eleventh, a 37-minute drive through Ashdod, a city that appears in no training
+video, is held out as the test set and never trained on.
+
+Every video is processed semi-automatically. The detector, tracker and reader run over it, a
+plate is kept for the reader only when its number was voted across many frames, and every kept
+number is then reviewed, with any doubtful crop dropped.
 
 | | Train | Validation | Test |
 |---|---|---|---|
 | Detector: video frames | 3,645 | 613 | 341 (held-out drive) |
-| Detector: labelled stills | 374 | 46 | 44 |
+| Detector: labeled stills | 374 | 46 | 44 |
 | Detector: plate boxes | 8,599 | 1,427 | 818 |
 | Reader: real plate crops | 5,070 crops of 2,698 plates (5-fold, by plate) | | 424 crops of 217 plates (held-out drive) |
 | Reader: synthetic plates (pretraining) | 34,606 | 2,000 | |
 
 Detector frames are split by 10-second blocks of each video, so validation never sees the
 training cars. Boxes too small or too uncertain to label are painted over rather than left
-unlabelled.
+unlabeled.
 
 ## Evaluation
 
@@ -67,6 +70,15 @@ unlabelled.
 - **Reader.** It is scored on whole plates: a plate counts only if every digit is right.
   `train_reader.py --cv` runs 5-fold cross-validation by plate, so every plate is tested by a
   model that never saw it.
+
+Results of the current models on the held-out Ashdod drive (341 frames, 754 plates) and in
+cross-validation:
+
+| Model | Test | Result |
+|---|---|---|
+| Detector | held-out drive | precision 98.5 %, recall 94.2 %, mAP50 0.985 |
+| Reader | held-out drive, 424 crops of 217 plates | 98.1 % of whole plates exact (416 of 424) |
+| Reader | 5-fold cross-validation by plate, 5,070 crops | 97.5 % of whole plates exact |
 
 ## Repository layout
 
@@ -77,8 +89,8 @@ src/                     the system
   pipeline.py            real-time engine (worker thread): capture, detect + track, batched
                          reading, voting, timings, gate log
   plate_reader.py        CNN+CTC reader: preprocessing, network, constrained decoding, voting
-  plate_origin.py        plate country (from colour) and number formatting
-  theme.py               colours, fonts, stylesheet, app icon
+  plate_origin.py        plate country (from color) and number formatting
+  theme.py               colors, fonts, stylesheet, app icon
   common.py              shared helpers: paths, dataset YAML, CUDA, run folders
   predict.py             detector only, on images / video / camera -> annotated output + CSV
   train_detector.py      fine-tune YOLO26m, then score the held-out test split
@@ -176,7 +188,7 @@ themselves when those are absent.
 - **Read the whole plate with CTC.** No digit segmentation is needed. Segmenting a plate into
   digits is fragile under blur, tilt and dirt.
 - **Synthetic pretraining, real fine-tuning.**
-  - Real labelled plates are scarce.
+  - Real labeled plates are scarce.
   - Rendered plates follow the real Israeli layouts and numbering rules, and their labels are exact
     by construction.
 - **Synthetic scenes for the detector (optional).**
@@ -191,8 +203,8 @@ themselves when those are absent.
     much taller than the plate itself, and training on it teaches loose boxes.
   - The reader has its own plate-level augmentation instead: rotation up to ±12° without cutting
     digits, viewing angle, blur, low resolution, compression, lighting, glare and shadow.
-- **Cross-validation by plate** for the reader, because real plates are too few for a meaningful
-  fixed test split.
+- **Cross-validation by plate, plus a held-out drive** for the reader. Cross-validation uses every
+  real plate for testing once, and a whole drive from an unseen city is kept aside as the final test.
 - **ByteTrack boxes are used as they are.** They are already Kalman-filtered; an extra smoothing
   step adds lag.
 

@@ -22,16 +22,16 @@ The commands below are run from the project root. Every tool prints its options 
 
 ```text
 data/detector/
-  pool/images/      every labelled image   (the source of truth; never modified by a split)
+  pool/images/      every labeled image   (the source of truth; never modified by a split)
   pool/labels/      one .txt per image, same name
   images/{train,val,test}/<source>/   one subfolder per source; every subfolder is read
   labels/{train,val,test}/<source>/   (same layout: an image's label is at the same relative path)
-    photos/        the labelled stills, derived from the pool by split_dataset.py
+    photos/        the labeled stills, derived from the pool by split_dataset.py
     synthetic/     optional synthetic scenes (train only, see section 3)
 ```
 
 `configs/dataset.yaml` points at this folder. A label file has one line per plate, in YOLO
-format, with values normalised to 0–1:
+format, with values normalized to 0–1:
 
 ```text
 0 <x_center> <y_center> <width> <height>
@@ -44,14 +44,14 @@ Class `0` is `license_plate`. An image with no plate has an empty label file.
 - **Coverage.** Use photos and video frames of vehicles, front and rear, at the distances, angles,
   times of day and weather the system will see.
 - **Video frames.** `tools/extract_frames_from_video.py` pulls frames at a fixed interval. Prefer
-  frames a few seconds apart: neighbouring frames are near-duplicates and add little.
+  frames a few seconds apart: neighboring frames are near-duplicates and add little.
 - **Difficult examples.** Include them: night, rain, glare, small and partly hidden plates,
   motorcycles.
 
-### Labelling
+### Labeling
 
 - **What to box.** Label **every** visible plate in an image, including small ones and those of
-  background vehicles. An unlabelled plate teaches the detector that it is not a plate. Box the
+  background vehicles. An unlabeled plate teaches the detector that it is not a plate. Box the
   plate itself, tight to its edges, not the area around it.
 - **The first labels.** Any tool that exports YOLO format works (for example Label Studio, CVAT or
   Roboflow).
@@ -71,7 +71,7 @@ Class `0` is `license_plate`. An image with no plate has an empty label file.
 
 ```bash
 python tools/split_dataset.py --seed 42             # 80/10/10 from the pool, reproducible
-python tools/dataset_check.py --split all           # format, normalisation, cross-split leakage
+python tools/dataset_check.py --split all           # format, normalization, cross-split leakage
 ```
 
 `split_dataset.py` rebuilds `images/` and `labels/` from the pool on every run and writes
@@ -119,7 +119,7 @@ During training, every plate is also augmented online, so each epoch sees new ve
 - viewing angle and camera pitch;
 - loose or tight detector boxes;
 - blur, motion blur, low resolution, noise, JPEG compression;
-- exposure, haze, night colour, glare, shadow;
+- exposure, haze, night color, glare, shadow;
 - dirt on the border.
 
 Each sample gets 1–3 of these groups, and 15% stay clean. To see a sheet of examples:
@@ -133,13 +133,13 @@ python src/train_reader.py --preview
 ## 3. Synthetic scenes (optional, detector training)
 
 Full synthetic frames add variety the real images may lack: places, cameras, weather, vehicle
-makes and colours. They are made in two steps.
+makes and colors. They are made in two steps.
 
 **1. Draw the scenes with blank plates.** An image-generation model draws each scene with the
 plates left **blank**: image models cannot be trusted to print exact digits.
 - `tools/gen_scenes.py` plans a balanced batch and writes the request to send:
   - camera, place, time and weather;
-  - the vehicles' make, model, body and colour;
+  - the vehicles' make, model, body and color;
   - the plate type.
 - The plates in the returned images are measured (boxes and corners, YOLO labels plus a
   `manifest.jsonl`) and checked against the detector. Plate positions reported by the image model
@@ -158,10 +158,10 @@ Each blank long plate gets a number in the real format:
 - **The strip:** IL with or without the flag, or empty.
 
 The digits are printed by darkening the blank plate, so they take on the scene's light, blur and
-colour. The output folder `<batch>_numbered/` holds:
+color. The output folder `<batch>_numbered/` holds:
 - the images and their labels;
 - reader crops of plates at least 90 px wide;
-- the manifest, with each plate's number and its vehicle's make, model and colour.
+- the manifest, with each plate's number and its vehicle's make, model and color.
 
 **3. Use them for training only.** Copy the numbered images and labels to
 `data/detector/images/train/synthetic/` and `labels/train/synthetic/`: every subfolder of a split is

@@ -39,7 +39,7 @@ python src/train_detector.py
 - **Starting point.** The run starts from the COCO-pretrained YOLO26m checkpoint, which is
   downloaded to `weights/pretrained/` on first use. Ultralytics gets a copy of
   `configs/dataset.yaml` with an absolute dataset path, so the project works from any folder.
-- **Augmentation.** It is online: Ultralytics' defaults (mosaic, shift and scale, colour, mirror)
+- **Augmentation.** It is online: Ultralytics' defaults (mosaic, shift and scale, color, mirror)
   plus camera effects (blur, motion blur, noise, JPEG, exposure). There is no rotation or shear;
   the README explains why.
 - **Output.** The run is written to `runs/train/<run_name>/`. At the end, `best.pt` is scored once
